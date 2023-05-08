@@ -3,6 +3,7 @@ package simple_http
 import (
 	"fmt"
 	"strings"
+	"sync"
 
 	lua "github.com/yuin/gopher-lua"
 	"github.com/yuin/gopher-lua/parse"
@@ -17,14 +18,22 @@ import (
 //	@return map[string]string
 type Signature func(map[string]interface{}, map[string]string, map[string]interface{}) (map[string]interface{}, map[string]string, error)
 
-var SignatureList map[string]Signature
+var (
+	signFunc map[string]Signature
+	locker   *sync.RWMutex
+)
+
+func init() {
+	signFunc = map[string]Signature{}
+	locker = &sync.RWMutex{}
+}
 
 // GetSignature
 //
 //	@param name
 //	@return Signature
 func GetSignature(name string) Signature {
-	if value, ok := SignatureList[name]; ok {
+	if value, ok := signFunc[name]; ok {
 		return value
 	}
 	return nil
@@ -35,6 +44,9 @@ func GetSignature(name string) Signature {
 //	@param name
 //	@param aaa
 func RegisterSignature(name string, aaa Signature) error {
+	locker.Lock()
+	defer locker.Unlock()
+	signFunc[name] = aaa
 	return nil
 }
 
@@ -44,9 +56,23 @@ func RegisterSignature(name string, aaa Signature) error {
 //	@param luaCode
 //	@return error
 func RegisterLuaSignature(name string, luaCode string) error {
+	locker.Lock()
+	defer locker.Unlock()
+
+	s, err := genLuaSignature(name, luaCode)
+	if err != nil {
+		return nil
+	}
+	signFunc[name] = s
 	return nil
 }
 
+// genLuaSignature
+//
+//	@param name
+//	@param luaCode
+//	@return Signature
+//	@return error
 func genLuaSignature(name string, luaCode string) (Signature, error) {
 	proto, err := compileLuaCode(name, luaCode)
 	if err != nil {
