@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/go-resty/resty/v2"
@@ -15,13 +16,44 @@ const (
 	contentTypeForm = "application/x-www-form-urlencoded"
 )
 
-func RegisterServiceAPI(name string, api *ServiceAPI) {
+var (
+	apiMap    map[string]*ServiceAPI
+	apiLocker *sync.RWMutex
+)
+
+func init() {
+	apiMap = map[string]*ServiceAPI{}
+	apiLocker = &sync.RWMutex{}
 }
 
+// RegisterServiceAPI
+//
+//	@param name
+//	@param api
+func RegisterServiceAPI(name string, api *ServiceAPI) {
+	apiLocker.Lock()
+	defer apiLocker.Unlock()
+	apiMap[name] = api
+}
+
+// GetServiceAPI
+//
+//	@param name
+//	@return *ServiceAPI
 func GetServiceAPI(name string) *ServiceAPI {
+	if api, ok := apiMap[name]; ok {
+		return api
+	}
 	return nil
 }
 
+// RequestServiceAPIByName
+//
+//	@param name
+//	@param input
+//	@param header
+//	@return *APIResponse
+//	@return error
 func RequestServiceAPIByName(name string, input map[string]interface{}, header map[string]string) (*APIResponse, error) {
 	api := GetServiceAPI(name)
 	if api == nil {
@@ -43,7 +75,7 @@ func RequestServiceAPI(api *ServiceAPI, input map[string]interface{}, header map
 		return nil, err
 	}
 
-	if response.Status() != "200" {
+	if response.StatusCode() != 200 {
 		return nil, fmt.Errorf("http error: %v", response.Status())
 	}
 
@@ -60,7 +92,9 @@ func RequestServiceAPI(api *ServiceAPI, input map[string]interface{}, header map
 func DoRequest(api *ServiceAPI, input map[string]interface{}, header map[string]string) (*resty.Response, error) {
 	client := resty.New()
 	client.SetBaseURL(api.Host)
-	client.SetTimeout(time.Duration(api.Timeout) * time.Millisecond)
+	if api.Timeout > 0 {
+		client.SetTimeout(time.Duration(api.Timeout) * time.Millisecond)
+	}
 
 	request := client.R()
 
@@ -70,7 +104,10 @@ func DoRequest(api *ServiceAPI, input map[string]interface{}, header map[string]
 	)
 
 	if len(api.SignType) > 0 {
-		sign := GetSignature(api.SignType)
+		sign := GetSign(api.SignType)
+		if sign == nil {
+			return nil, fmt.Errorf("sign `%s` not supported", api.SignType)
+		}
 		tmpInput, tmpHeader, err := sign(input, header, api.SignConfig)
 		if err != nil {
 			return nil, fmt.Errorf("signature error:%s", err.Error())
@@ -112,7 +149,7 @@ func executeRequest(req *resty.Request, method string, fullURL string) (*resty.R
 
 func extractResponse(bytes []byte, api *ServiceAPI) *APIResponse {
 
-	if !api.ExtractResponse {
+	if api.DisableExtract {
 		var data interface{}
 		if err := json.Unmarshal(bytes, &data); err != nil {
 			data = string(bytes)
