@@ -91,18 +91,21 @@ func RegisterLuaSign(name string, luaCode string) error {
 //	@return Signature
 //	@return error
 func genLuaSignature(name string, luaCode string) (Signature, error) {
-	proto, err := compileLuaCode(name, luaCode)
+	/*
+		proto, err := compileLuaCode(name, luaCode)
+		if err != nil {
+			return nil, fmt.Errorf("compile lua code error:%s", err.Error())
+		}
+	*/
+	l := lua.NewState()
+	err := l.DoString(luaCode)
 	if err != nil {
 		return nil, fmt.Errorf("compile lua code error:%s", err.Error())
 	}
 
 	return func(input map[string]interface{}, header map[string]string, config map[string]interface{}) (map[string]interface{}, map[string]string, error) {
 		// 创建一个lua解释器实例
-		l := lua.NewState()
-		defer l.Close()
 		// 需要执行的lua代码
-		lfunc := l.NewFunctionFromProto(proto)
-		l.Push(lfunc)
 		inputTable := newLuaTable(l, input)
 		headerTable := newLuaTable(l, ToInterfaceMap(header))
 		configTable := newLuaTable(l, config)
