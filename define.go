@@ -2,7 +2,7 @@ package simple_http
 
 type ServiceAPI struct {
 	Host           string                 `json:"host"`
-	SignType       string                 `json:"sign_type"`
+	SignName       string                 `json:"sign_name"`
 	SignConfig     map[string]interface{} `json:"sign_config"`
 	Path           string                 `json:"path"`
 	ContentType    string                 `json:"content_type"`

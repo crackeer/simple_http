@@ -103,13 +103,12 @@ func DoRequest(api *ServiceAPI, input map[string]interface{}, header map[string]
 		newHeader map[string]string      = header
 	)
 
-	if len(api.SignType) > 0 {
-		sign := GetSign(api.SignType)
+	if len(api.SignName) > 0 {
+		sign := GetSign(api.SignName)
 		if sign == nil {
-			return nil, fmt.Errorf("sign `%s` not supported", api.SignType)
+			return nil, fmt.Errorf("sign `%s` not supported", api.SignName)
 		}
 		tmpInput, tmpHeader, err := sign(input, header, api.SignConfig)
-		fmt.Println(tmpInput, tmpHeader)
 		if err != nil {
 			return nil, fmt.Errorf("signature error:%s", err.Error())
 		}
