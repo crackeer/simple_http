@@ -109,8 +109,6 @@ func genLuaSignature(name string, luaCode string) (Signature, error) {
 		inputTable := newLuaTable(l, input)
 		headerTable := newLuaTable(l, ToInterfaceMap(header))
 		configTable := newLuaTable(l, config)
-		fmt.Println(inputTable.Len(), headerTable.Len(), configTable.Len())
-
 		err = l.CallByParam(lua.P{
 			Fn:      l.GetGlobal(name), // 获取info函数引用
 			NRet:    2,                 // 指定返回值数量
