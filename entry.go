@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/go-resty/resty/v2"
+	"github.com/sirupsen/logrus"
 	"github.com/tidwall/gjson"
 )
 
@@ -19,11 +20,21 @@ const (
 var (
 	apiMap    map[string]*ServiceAPI
 	apiLocker *sync.RWMutex
+	logger    *logrus.Logger
 )
 
 func init() {
 	apiMap = map[string]*ServiceAPI{}
 	apiLocker = &sync.RWMutex{}
+}
+
+// SetLogger
+//
+//	@param l
+func SetLogger(l *logrus.Logger) {
+	apiLocker.Lock()
+	defer apiLocker.Unlock()
+	logger = l
 }
 
 // RegisterServiceAPI
@@ -96,12 +107,37 @@ func DoRequest(api *ServiceAPI, input map[string]interface{}, header map[string]
 		client.SetTimeout(time.Duration(api.Timeout) * time.Millisecond)
 	}
 
-	request := client.R()
-
 	var (
 		newInput  map[string]interface{} = input
 		newHeader map[string]string      = header
+
+		response *resty.Response
+		err      error
 	)
+
+	request := client.R()
+	if logger != nil {
+		request.EnableTrace()
+		defer func() {
+			trace := request.TraceInfo()
+			entry := logger.WithFields(map[string]interface{}{
+				"host":         api.Host,
+				"path":         api.Path,
+				"method":       api.Method,
+				"content_type": api.ContentType,
+				"header":       newHeader,
+				"input":        newInput,
+				"remote_addr":  trace.RemoteAddr.String(),
+				"cost":         trace.TotalTime / time.Duration(time.Millisecond),
+			})
+			if err != nil {
+				entry.Error(err.Error())
+			} else {
+				entry.WithField("response", string(response.Body()))
+				entry.Info("success")
+			}
+		}()
+	}
 
 	if len(api.SignName) > 0 {
 		sign := GetSign(api.SignName)
@@ -131,20 +167,10 @@ func DoRequest(api *ServiceAPI, input map[string]interface{}, header map[string]
 		}
 	}
 
-	return executeRequest(request, api.Method, api.Path)
+	response, err = request.Execute(api.Method, api.Path)
 
-}
-
-func executeRequest(req *resty.Request, method string, fullURL string) (*resty.Response, error) {
-	var response *resty.Response
-	var err error
-	switch method {
-	case http.MethodGet:
-		response, err = req.Get(fullURL)
-	case http.MethodPost:
-		response, err = req.Post(fullURL)
-	}
 	return response, err
+
 }
 
 func extractResponse(bytes []byte, api *ServiceAPI) *APIResponse {

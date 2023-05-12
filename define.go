@@ -1,5 +1,6 @@
 package simple_http
 
+// ServiceAPI
 type ServiceAPI struct {
 	Host           string                 `json:"host"`
 	SignName       string                 `json:"sign_name"`
