@@ -166,15 +166,12 @@ func DoRequest(api *ServiceAPI, input map[string]interface{}, header map[string]
 			request.SetMultipartFormData(Map2MapString(newInput))
 		}
 	}
-
 	response, err = request.Execute(api.Method, api.Path)
-
 	return response, err
 
 }
 
 func extractResponse(bytes []byte, api *ServiceAPI) *APIResponse {
-
 	if api.DisableExtract {
 		var data interface{}
 		if err := json.Unmarshal(bytes, &data); err != nil {
