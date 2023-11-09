@@ -7,7 +7,7 @@ import (
 
 // SignHandle
 type SignHandle interface {
-	Sign(*ServiceAPI, map[string]interface{}, map[string]interface{}, map[string]string) (*ServiceAPI, map[string]interface{}, map[string]interface{}, map[string]string)
+	Sign(*ServiceAPI, map[string]interface{}, map[string]string) (*ServiceAPI, map[string]interface{}, map[string]string, error)
 	ID() string
 	Introduction() string
 }

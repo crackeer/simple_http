@@ -65,7 +65,7 @@ func GetServiceAPI(name string) *ServiceAPI {
 //	@param header
 //	@return *APIResponse
 //	@return error
-func RequestServiceAPIByName(name string, input map[string]interface{}, header map[string]string) (*APIResponse, error) {
+func RequestByName(name string, input map[string]interface{}, header map[string]string) (*APIResponse, error) {
 	api := GetServiceAPI(name)
 	if api == nil {
 		return nil, fmt.Errorf("api config `%s` not found", name)
@@ -101,19 +101,35 @@ func RequestServiceAPI(api *ServiceAPI, input map[string]interface{}, header map
 //	@return *resty.Response
 //	@return error
 func DoRequest(api *ServiceAPI, input map[string]interface{}, header map[string]string) (*resty.Response, error) {
-	client := resty.New()
-	client.SetBaseURL(api.Host)
-	if api.Timeout > 0 {
-		client.SetTimeout(time.Duration(api.Timeout) * time.Millisecond)
+	var (
+		inputNew  map[string]interface{} = input
+		headerNew map[string]string      = header
+		apiNew    *ServiceAPI            = api
+		err       error
+		response  *resty.Response
+	)
+
+	if api == nil {
+		return nil, fmt.Errorf("api config nil")
 	}
 
-	var (
-		newInput  map[string]interface{} = input
-		newHeader map[string]string      = header
+	if len(api.Sign) > 0 {
+		signHandle := GetSignHandle(api.Sign)
+		if signHandle == nil {
+			return nil, fmt.Errorf("sign `%s` not supported", api.Sign)
+		}
+		if api, input, header, err = signHandle.Sign(api, input, header); err != nil {
+			return nil, fmt.Errorf("signature `%s` error:%s", api.Sign, err.Error())
+		} else {
+			apiNew, inputNew, headerNew = api, input, header
+		}
+	}
 
-		response *resty.Response
-		err      error
-	)
+	client := resty.New()
+	client.SetBaseURL(apiNew.Host)
+	if apiNew.Timeout > 0 {
+		client.SetTimeout(time.Duration(apiNew.Timeout) * time.Millisecond)
+	}
 
 	request := client.R()
 	if logger != nil {
@@ -125,8 +141,8 @@ func DoRequest(api *ServiceAPI, input map[string]interface{}, header map[string]
 				"path":         api.Path,
 				"method":       api.Method,
 				"content_type": api.ContentType,
-				"header":       newHeader,
-				"input":        newInput,
+				"header":       headerNew,
+				"input":        inputNew,
 				"remote_addr":  trace.RemoteAddr.String(),
 				"cost":         trace.TotalTime / time.Duration(time.Millisecond),
 			})
@@ -139,31 +155,20 @@ func DoRequest(api *ServiceAPI, input map[string]interface{}, header map[string]
 		}()
 	}
 
-	if len(api.SignName) > 0 {
-		sign := GetSign(api.SignName)
-		if sign == nil {
-			return nil, fmt.Errorf("sign `%s` not supported", api.SignName)
-		}
-		tmpInput, tmpHeader, err := sign(input, header, api.SignConfig)
-		if err != nil {
-			return nil, fmt.Errorf("signature error:%s", err.Error())
-		}
-		newInput, newHeader = tmpInput, tmpHeader
-	}
-	request.SetHeaders(api.StaticHeader)
-	request.SetHeaders(newHeader)
+	request.SetHeaders(apiNew.StaticHeader)
+	request.SetHeaders(headerNew)
 	for {
 		if api.Method == http.MethodGet {
-			request = request.SetQueryParams(Map2MapString(newInput))
+			request = request.SetQueryParams(Map2MapString(inputNew))
 			break
 		}
 
 		if api.Method == http.MethodPost {
 			if api.Method == contentTypeJSON {
-				request.SetBody(newInput)
+				request.SetBody(inputNew)
 				break
 			}
-			request.SetMultipartFormData(Map2MapString(newInput))
+			request.SetMultipartFormData(Map2MapString(inputNew))
 		}
 	}
 	response, err = request.Execute(api.Method, api.Path)

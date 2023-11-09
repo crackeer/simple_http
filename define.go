@@ -3,7 +3,7 @@ package simple_http
 // ServiceAPI
 type ServiceAPI struct {
 	Host           string                 `json:"host"`
-	SignName       string                 `json:"sign_name"`
+	Sign           string                 `json:"sign"`
 	SignConfig     map[string]interface{} `json:"sign_config"`
 	Path           string                 `json:"path"`
 	ContentType    string                 `json:"content_type"`
@@ -23,9 +23,4 @@ type APIResponse struct {
 	Message string      `json:"message"`
 	Data    interface{} `json:"data"`
 	Error   bool        `json:"error"`
-}
-
-// ServiceAPIFactory
-type ServiceAPIFactory interface {
-	GetAPI() *ServiceAPI
 }
