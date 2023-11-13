@@ -22,6 +22,13 @@ func init() {
 	locker = &sync.RWMutex{}
 }
 
+// GetSignHandleMap
+//
+//	@return map
+func GetSignHandleMap() map[string]SignHandle {
+	return signHandleMap
+}
+
 // GetSign GetSignature
 //
 //	@param name
